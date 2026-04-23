@@ -3,8 +3,9 @@ const nickname = JSON.parse(document.getElementById("board-nickname").textConten
 
 const CURSOR_THROTTLE_MS = 32;
 const DRAWING_SYNC_THROTTLE_MS = 48;
-const MIN_PEN_POINT_DISTANCE = 2.2;
-const MAX_PEN_POINT_DISTANCE = 180;
+const MIN_PEN_POINT_DISTANCE = 0.75;
+const MAX_PEN_POINT_DISTANCE = 260;
+const SMOOTHING_MIN_POINTS = 4;
 
 const state = {
     nickname,
@@ -677,8 +678,11 @@ function drawSmoothStroke(targetContext, points) {
         targetContext.beginPath();
         targetContext.moveTo(segment[0].x, segment[0].y);
 
-        if (segment.length === 2) {
-            targetContext.lineTo(segment[1].x, segment[1].y);
+        if (segment.length < SMOOTHING_MIN_POINTS) {
+            for (const point of segment.slice(1)) {
+                targetContext.lineTo(point.x, point.y);
+            }
+
             targetContext.stroke();
             continue;
         }
