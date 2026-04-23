@@ -8,7 +8,10 @@
 
 <main class="workspace-shell">
     <aside class="workspace-toolbar">
-        <a class="toolbar-back" asp-action="Index" asp-route-nickname="@Model.Nickname">All boards</a>
+        <a class="toolbar-back" asp-action="Index" asp-route-nickname="@Model.Nickname">
+            <span aria-hidden="true">←</span>
+            <span>Boards</span>
+        </a>
 
         <div class="tool-cluster">
             <button type="button" class="tool-button is-active" data-tool="pen">Pen</button>
@@ -19,13 +22,15 @@
         </div>
 
         <div class="tool-panel">
-            <label for="strokeColor">Stroke color</label>
+            <p class="tool-panel-title">Style</p>
+
+            <label for="strokeColor">Stroke</label>
             <input id="strokeColor" type="color" value="#111827" />
 
-            <label for="fillColor">Fill color</label>
+            <label for="fillColor">Fill</label>
             <input id="fillColor" type="color" value="#dbeafe" />
 
-            <label for="strokeWidth">Stroke size</label>
+            <label for="strokeWidth">Size</label>
             <input id="strokeWidth" type="range" min="1" max="18" step="1" value="4" />
             <span id="strokeWidthValue">4 px</span>
         </div>
@@ -63,7 +68,7 @@
                 <div class="section-heading compact">
                     <div>
                         <p class="eyebrow">Pages</p>
-                        <h2>Board pages</h2>
+                        <h2>Storyboard</h2>
                     </div>
                     <button type="button" id="addPageButton" class="icon-button" aria-label="Add page">+</button>
                 </div>
