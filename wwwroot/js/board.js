@@ -4,6 +4,7 @@ const nickname = JSON.parse(document.getElementById("board-nickname").textConten
 const CURSOR_THROTTLE_MS = 32;
 const DRAWING_SYNC_THROTTLE_MS = 48;
 const MIN_PEN_POINT_DISTANCE = 2.2;
+const MAX_PEN_POINT_DISTANCE = 180;
 
 const state = {
     nickname,
@@ -229,6 +230,7 @@ async function onPointerDown(event) {
     elements.canvas.setPointerCapture(event.pointerId);
     state.draft = {
         id: crypto.randomUUID(),
+        pointerId: event.pointerId,
         elementType: state.tool,
         strokeColor: state.strokeColor,
         fillColor: state.tool === "pen" ? null : `${state.fillColor}AA`,
@@ -244,6 +246,10 @@ async function onPointerDown(event) {
 }
 
 async function onPointerMove(event) {
+    if (state.draft && event.pointerId !== state.draft.pointerId) {
+        return;
+    }
+
     const points = getPointerPoints(event);
     const point = points[points.length - 1] || getCanvasPoint(event);
     await broadcastCursor(point);
@@ -263,6 +269,10 @@ async function onPointerMove(event) {
 
 async function onPointerUp(event) {
     if (!state.draft || !state.activePageId) {
+        return;
+    }
+
+    if (event.pointerId !== state.draft.pointerId) {
         return;
     }
 
@@ -659,29 +669,60 @@ function normalizeStrokePoints(points) {
 }
 
 function drawSmoothStroke(targetContext, points) {
-    targetContext.beginPath();
-    targetContext.moveTo(points[0].x, points[0].y);
+    for (const segment of splitStrokeSegments(points)) {
+        if (segment.length < 2) {
+            continue;
+        }
 
-    if (points.length === 2) {
-        targetContext.lineTo(points[1].x, points[1].y);
+        targetContext.beginPath();
+        targetContext.moveTo(segment[0].x, segment[0].y);
+
+        if (segment.length === 2) {
+            targetContext.lineTo(segment[1].x, segment[1].y);
+            targetContext.stroke();
+            continue;
+        }
+
+        for (let index = 1; index < segment.length - 1; index++) {
+            const current = segment[index];
+            const next = segment[index + 1];
+            const midpoint = {
+                x: (current.x + next.x) / 2,
+                y: (current.y + next.y) / 2
+            };
+
+            targetContext.quadraticCurveTo(current.x, current.y, midpoint.x, midpoint.y);
+        }
+
+        const last = segment[segment.length - 1];
+        targetContext.lineTo(last.x, last.y);
         targetContext.stroke();
-        return;
+    }
+}
+
+function splitStrokeSegments(points) {
+    const segments = [];
+    let currentSegment = [];
+
+    for (const point of points) {
+        const previousPoint = currentSegment[currentSegment.length - 1];
+        if (previousPoint && distance(previousPoint, point) > MAX_PEN_POINT_DISTANCE) {
+            if (currentSegment.length > 1) {
+                segments.push(currentSegment);
+            }
+
+            currentSegment = [point];
+            continue;
+        }
+
+        currentSegment.push(point);
     }
 
-    for (let index = 1; index < points.length - 1; index++) {
-        const current = points[index];
-        const next = points[index + 1];
-        const midpoint = {
-            x: (current.x + next.x) / 2,
-            y: (current.y + next.y) / 2
-        };
-
-        targetContext.quadraticCurveTo(current.x, current.y, midpoint.x, midpoint.y);
+    if (currentSegment.length > 1) {
+        segments.push(currentSegment);
     }
 
-    const last = points[points.length - 1];
-    targetContext.lineTo(last.x, last.y);
-    targetContext.stroke();
+    return segments;
 }
 
 function getCanvasPoint(event) {
