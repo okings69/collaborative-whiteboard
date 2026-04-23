@@ -80,7 +80,7 @@ static string NormalizePostgresConnectionString(string value)
     var password = Uri.UnescapeDataString(userInfo.ElementAtOrDefault(1) ?? string.Empty);
     var database = uri.AbsolutePath.TrimStart('/');
 
-    return new Npgsql.NpgsqlConnectionStringBuilder
+    var builder = new Npgsql.NpgsqlConnectionStringBuilder
     {
         Host = uri.Host,
         Port = uri.Port > 0 ? uri.Port : 5432,
@@ -88,5 +88,8 @@ static string NormalizePostgresConnectionString(string value)
         Username = username,
         Password = password,
         SslMode = Npgsql.SslMode.Require
-    }.ConnectionString;
+    };
+
+    builder["GSS Encryption Mode"] = "Disable";
+    return builder.ConnectionString;
 }
