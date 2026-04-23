@@ -3,6 +3,7 @@ const nickname = JSON.parse(document.getElementById("board-nickname").textConten
 
 const CURSOR_THROTTLE_MS = 32;
 const DRAWING_SYNC_THROTTLE_MS = 48;
+const MIN_PEN_POINT_DISTANCE = 2.2;
 
 const state = {
     nickname,
@@ -243,15 +244,18 @@ async function onPointerDown(event) {
 }
 
 async function onPointerMove(event) {
-    const point = getCanvasPoint(event);
+    const points = getPointerPoints(event);
+    const point = points[points.length - 1] || getCanvasPoint(event);
     await broadcastCursor(point);
 
     if (!state.draft) {
         return;
     }
 
-    state.draft.current = point;
-    state.draft.points.push(point);
+    for (const nextPoint of points) {
+        appendDraftPoint(state.draft, nextPoint);
+    }
+
     renderCanvas();
     drawElement(draftToElement(state.draft), true);
     void broadcastDraftUpdate();
@@ -267,7 +271,7 @@ async function onPointerUp(event) {
     }
 
     const point = getCanvasPoint(event);
-    state.draft.current = point;
+    appendDraftPoint(state.draft, point, true);
     const element = draftToElement(state.draft);
     state.draft = null;
     state.lastDraftBroadcastAt = 0;
@@ -295,7 +299,8 @@ function draftToElement(draft) {
     }
 
     if (draft.elementType === "pen") {
-        if (draft.points.length < 2) {
+        const points = normalizeStrokePoints(draft.points);
+        if (points.length < 2) {
             return null;
         }
 
@@ -305,7 +310,7 @@ function draftToElement(draft) {
             strokeColor: draft.strokeColor,
             strokeWidth: draft.strokeWidth,
             layerOrder: draft.layerOrder,
-            points: draft.points
+            points
         });
     }
 
@@ -362,18 +367,13 @@ function drawElement(element, isDraft) {
     context.fillStyle = element.fillColor || "transparent";
 
     if (element.elementType === "pen") {
-        const points = element.points || [];
+        const points = normalizeStrokePoints(element.points || []);
         if (points.length < 2) {
             context.restore();
             return;
         }
 
-        context.beginPath();
-        context.moveTo(points[0].x, points[0].y);
-        for (const point of points.slice(1)) {
-            context.lineTo(point.x, point.y);
-        }
-        context.stroke();
+        drawSmoothStroke(context, points);
         context.restore();
         return;
     }
@@ -618,6 +618,70 @@ function normalizeRect(element) {
         width: Math.abs(element.width),
         height: Math.abs(element.height)
     };
+}
+
+function getPointerPoints(event) {
+    const sourceEvents = typeof event.getCoalescedEvents === "function"
+        ? event.getCoalescedEvents()
+        : [event];
+
+    return sourceEvents.map((sourceEvent) => getCanvasPoint(sourceEvent));
+}
+
+function appendDraftPoint(draft, point, force = false) {
+    const lastPoint = draft.points[draft.points.length - 1];
+    if (!force && lastPoint && distance(lastPoint, point) < MIN_PEN_POINT_DISTANCE) {
+        return;
+    }
+
+    draft.current = point;
+    draft.points.push(point);
+}
+
+function normalizeStrokePoints(points) {
+    const orderedPoints = [];
+
+    for (const point of points || []) {
+        if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+            continue;
+        }
+
+        const nextPoint = { x: point.x, y: point.y };
+        const previousPoint = orderedPoints[orderedPoints.length - 1];
+        if (previousPoint && distance(previousPoint, nextPoint) < MIN_PEN_POINT_DISTANCE) {
+            continue;
+        }
+
+        orderedPoints.push(nextPoint);
+    }
+
+    return orderedPoints;
+}
+
+function drawSmoothStroke(targetContext, points) {
+    targetContext.beginPath();
+    targetContext.moveTo(points[0].x, points[0].y);
+
+    if (points.length === 2) {
+        targetContext.lineTo(points[1].x, points[1].y);
+        targetContext.stroke();
+        return;
+    }
+
+    for (let index = 1; index < points.length - 1; index++) {
+        const current = points[index];
+        const next = points[index + 1];
+        const midpoint = {
+            x: (current.x + next.x) / 2,
+            y: (current.y + next.y) / 2
+        };
+
+        targetContext.quadraticCurveTo(current.x, current.y, midpoint.x, midpoint.y);
+    }
+
+    const last = points[points.length - 1];
+    targetContext.lineTo(last.x, last.y);
+    targetContext.stroke();
 }
 
 function getCanvasPoint(event) {
@@ -924,14 +988,9 @@ function renderPagePreview(canvas, pageElements) {
         previewContext.fillStyle = element.fillColor || "transparent";
 
         if (element.elementType === "pen") {
-            const points = element.points || [];
+            const points = normalizeStrokePoints(element.points || []);
             if (points.length > 1) {
-                previewContext.beginPath();
-                previewContext.moveTo(points[0].x, points[0].y);
-                for (const point of points.slice(1)) {
-                    previewContext.lineTo(point.x, point.y);
-                }
-                previewContext.stroke();
+                drawSmoothStroke(previewContext, points);
             }
         } else if (element.elementType === "rectangle") {
             const rect = normalizeRect(element);
