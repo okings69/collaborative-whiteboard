@@ -1,0 +1,223 @@
+@using System.Globalization
+@using CollaborativeBoard.Contracts
+@model BoardsIndexViewModel
+@{
+    ViewData["Title"] = "Boards";
+}
+
+@functions {
+    private static string Number(float value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static (float X, float Y, float Width, float Height) Normalize(DrawingElementDto element)
+    {
+        var width = Math.Abs(element.Width);
+        var height = Math.Abs(element.Height);
+        var x = element.Width < 0 ? element.X + element.Width : element.X;
+        var y = element.Height < 0 ? element.Y + element.Height : element.Y;
+        return (x, y, width, height);
+    }
+
+    private static string BuildPolyline(IReadOnlyList<CanvasPointDto> points)
+    {
+        return string.Join(" ", points.Select(point => $"{Number(point.X)},{Number(point.Y)}"));
+    }
+
+    private static string SvgText(DrawingElementDto element)
+    {
+        var fontSize = Number(element.FontSize <= 0 ? 30 : element.FontSize);
+        var x = Number(element.X);
+        var y = Number(element.Y);
+        var stroke = System.Net.WebUtility.HtmlEncode(element.StrokeColor);
+        var text = System.Net.WebUtility.HtmlEncode(element.TextContent ?? string.Empty);
+
+        return $"<text x=\"{x}\" y=\"{y}\" fill=\"{stroke}\" font-size=\"{fontSize}\" font-family=\"Bahnschrift, Arial Narrow, sans-serif\" font-weight=\"700\">{text}</text>";
+    }
+}
+
+<main class="landing-shell">
+    <section class="hero-panel">
+        <div class="hero-copy">
+            <p class="eyebrow">Collaborative Whiteboard</p>
+            <h1>Open a board, invite someone, and keep every idea exactly where it belongs.</h1>
+            <p class="hero-text">
+                Boardspace is a shared drawing space for quick sketches, comments, diagrams, and page-based collaboration.
+                Join with a nickname, work together live, and come back later without losing anything.
+            </p>
+
+            <form class="identity-card" method="get" asp-action="Index">
+                <label for="nickname">Your nickname</label>
+                <input id="nickname" name="nickname" value="@Model.Nickname" maxlength="32" placeholder="PixelPilot" />
+                <button type="submit" class="button-ghost">Use this nickname</button>
+            </form>
+        </div>
+
+        <div class="create-board-card">
+            <div>
+                <p class="eyebrow">New board</p>
+                <h2>Create a shared workspace</h2>
+                <p>Start with a blank board, then share the invite link or board ID with anyone you want to join.</p>
+            </div>
+
+            @if (TempData["BoardError"] is string errorMessage)
+            {
+                <div class="form-error">@errorMessage</div>
+            }
+
+            <form method="post" asp-action="Create" class="create-board-form">
+                @Html.AntiForgeryToken()
+                <input id="createNickname" type="hidden" name="Nickname" value="@Model.Nickname" />
+
+                <label for="boardName">Board name</label>
+                <input id="boardName" name="BoardName" maxlength="120" placeholder="Sprint planning" />
+
+                <button id="createBoardButton" type="submit" class="button-primary" disabled>Create board</button>
+                <p class="form-hint">A board is created as soon as both the nickname and board name are filled in.</p>
+            </form>
+
+            <div class="join-divider">
+                <span></span>
+                <strong>Join an existing board</strong>
+                <span></span>
+            </div>
+
+            <form method="post" asp-action="Join" class="create-board-form">
+                @Html.AntiForgeryToken()
+                <input id="joinNickname" type="hidden" name="nickname" value="@Model.Nickname" />
+
+                <label for="boardReference">Board ID or invite link</label>
+                <input id="boardReference" name="boardReference" maxlength="500" placeholder="Paste a board ID or the full invite link" />
+
+                <button id="joinBoardButton" type="submit" class="button-secondary" disabled>Join board</button>
+                <p class="form-hint">You can join by the board ID shown in the workspace header or by the copied invite link.</p>
+            </form>
+        </div>
+    </section>
+
+    <section class="boards-section">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Recent boards</p>
+                <h2>Pick up where the team left off</h2>
+            </div>
+            <a class="button-ghost" asp-action="Index" asp-route-nickname="@Model.Nickname">Refresh list</a>
+        </div>
+
+        <div class="board-grid">
+            @if (Model.Boards.Count == 0)
+            {
+                <div class="empty-state-card">
+                    <h3>No boards yet</h3>
+                    <p>Create the first board to start drawing, annotating, and sharing pages live.</p>
+                </div>
+            }
+            else
+            {
+                @foreach (var board in Model.Boards)
+                {
+                    <article class="board-card">
+                        <div class="board-preview" style="--board-accent:@board.AccentColor">
+                            <div class="board-preview-meta">
+                                <span class="board-preview-badge">@board.PageCount page@(board.PageCount == 1 ? string.Empty : "s")</span>
+                                <span class="board-preview-code">#@board.ShareCode</span>
+                            </div>
+                            <svg class="board-preview-art" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                                <rect x="0" y="0" width="1920" height="1080" rx="48" fill="rgba(255,255,255,0.92)" />
+                                @if (board.PreviewElements.Count == 0)
+                                {
+                                    <g opacity="0.6">
+                                        <rect x="180" y="180" width="560" height="260" rx="40" fill="rgba(219,234,254,0.9)" />
+                                        <rect x="820" y="320" width="420" height="180" rx="36" fill="rgba(255,255,255,0.92)" stroke="rgba(148,163,184,0.28)" stroke-width="10" />
+                                        <rect x="1280" y="210" width="320" height="320" rx="42" fill="rgba(240,249,255,0.95)" stroke="rgba(14,165,233,0.18)" stroke-width="10" />
+                                    </g>
+                                }
+                                else
+                                {
+                                    @foreach (var element in board.PreviewElements)
+                                    {
+                                        if (element.ElementType == "pen" && element.Points.Count > 1)
+                                        {
+                                            <polyline points="@BuildPolyline(element.Points)"
+                                                      fill="none"
+                                                      stroke="@element.StrokeColor"
+                                                      stroke-width="@Number(element.StrokeWidth)"
+                                                      stroke-linecap="round"
+                                                      stroke-linejoin="round" />
+                                        }
+                                        else if (element.ElementType == "rectangle")
+                                        {
+                                            var rect = Normalize(element);
+                                            <rect x="@Number(rect.X)"
+                                                  y="@Number(rect.Y)"
+                                                  width="@Number(rect.Width)"
+                                                  height="@Number(rect.Height)"
+                                                  rx="26"
+                                                  fill="@(string.IsNullOrWhiteSpace(element.FillColor) ? "transparent" : element.FillColor)"
+                                                  stroke="@element.StrokeColor"
+                                                  stroke-width="@Number(element.StrokeWidth)" />
+                                        }
+                                        else if (element.ElementType == "circle")
+                                        {
+                                            var rect = Normalize(element);
+                                            <ellipse cx="@Number(rect.X + rect.Width / 2)"
+                                                     cy="@Number(rect.Y + rect.Height / 2)"
+                                                     rx="@Number(rect.Width / 2)"
+                                                     ry="@Number(rect.Height / 2)"
+                                                     fill="@(string.IsNullOrWhiteSpace(element.FillColor) ? "transparent" : element.FillColor)"
+                                                     stroke="@element.StrokeColor"
+                                                     stroke-width="@Number(element.StrokeWidth)" />
+                                        }
+                                        else if (element.ElementType == "text" && !string.IsNullOrWhiteSpace(element.TextContent))
+                                        {
+                                            @Html.Raw(SvgText(element))
+                                        }
+                                    }
+                                }
+                            </svg>
+                        </div>
+                        <div class="board-card-body">
+                            <div>
+                                <h3>@board.Name</h3>
+                                <p>@board.ElementCount item@(board.ElementCount == 1 ? string.Empty : "s") • Updated @board.UpdatedAtUtc.ToLocalTime().ToString("g")</p>
+                            </div>
+                            <a class="button-secondary"
+                               asp-action="Workspace"
+                               asp-route-id="@board.Id"
+                               asp-route-nickname="@Model.Nickname">
+                                Open board
+                            </a>
+                        </div>
+                    </article>
+                }
+            }
+        </div>
+    </section>
+</main>
+
+<script>
+    (() => {
+        const nicknameInput = document.getElementById("nickname");
+        const createNicknameInput = document.getElementById("createNickname");
+        const joinNicknameInput = document.getElementById("joinNickname");
+        const boardNameInput = document.getElementById("boardName");
+        const createBoardButton = document.getElementById("createBoardButton");
+        const boardReferenceInput = document.getElementById("boardReference");
+        const joinBoardButton = document.getElementById("joinBoardButton");
+
+        if (!nicknameInput || !createNicknameInput || !joinNicknameInput || !boardNameInput || !createBoardButton || !boardReferenceInput || !joinBoardButton) {
+            return;
+        }
+
+        const syncNickname = () => {
+            const nickname = nicknameInput.value.trim();
+            createNicknameInput.value = nickname;
+            joinNicknameInput.value = nickname;
+            createBoardButton.disabled = !createNicknameInput.value || !boardNameInput.value.trim();
+            joinBoardButton.disabled = !joinNicknameInput.value || !boardReferenceInput.value.trim();
+        };
+
+        nicknameInput.addEventListener("input", syncNickname);
+        boardNameInput.addEventListener("input", syncNickname);
+        boardReferenceInput.addEventListener("input", syncNickname);
+        syncNickname();
+    })();
+</script>

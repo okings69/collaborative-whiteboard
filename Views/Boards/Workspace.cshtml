@@ -1,0 +1,92 @@
+@model BoardWorkspaceViewModel
+@{
+    ViewData["Title"] = Model.Board.Name;
+    var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+    var initialBoardJson = JsonSerializer.Serialize(Model.Board, jsonOptions);
+    var initialNicknameJson = JsonSerializer.Serialize(Model.Nickname, jsonOptions);
+}
+
+<main class="workspace-shell">
+    <aside class="workspace-toolbar">
+        <a class="toolbar-back" asp-action="Index" asp-route-nickname="@Model.Nickname">All boards</a>
+
+        <div class="tool-cluster">
+            <button type="button" class="tool-button is-active" data-tool="pen">Pen</button>
+            <button type="button" class="tool-button" data-tool="rectangle">Rectangle</button>
+            <button type="button" class="tool-button" data-tool="circle">Circle</button>
+            <button type="button" class="tool-button" data-tool="text">Text</button>
+            <button type="button" class="tool-button" data-tool="eraser">Eraser</button>
+        </div>
+
+        <div class="tool-panel">
+            <label for="strokeColor">Stroke color</label>
+            <input id="strokeColor" type="color" value="#111827" />
+
+            <label for="fillColor">Fill color</label>
+            <input id="fillColor" type="color" value="#dbeafe" />
+
+            <label for="strokeWidth">Stroke size</label>
+            <input id="strokeWidth" type="range" min="1" max="18" step="1" value="4" />
+            <span id="strokeWidthValue">4 px</span>
+        </div>
+
+        <button type="button" id="exportButton" class="button-ghost toolbar-export">Export as JPEG</button>
+    </aside>
+
+    <section class="workspace-main">
+        <header class="workspace-topbar">
+            <div class="workspace-title-block">
+                <p class="eyebrow">Shared whiteboard</p>
+                <h1>@Model.Board.Name</h1>
+                <div class="board-identity">
+                    <span class="board-id-badge">Board ID: @Model.Board.Id</span>
+                    <span class="board-access-badge">Access: anyone with the link can edit</span>
+                    <button type="button" id="copyInviteButton" class="button-ghost">Copy invite link</button>
+                </div>
+            </div>
+
+            <div class="workspace-meta">
+                <span class="nickname-chip">Signed in as @Model.Nickname</span>
+                <div id="presenceList" class="presence-list"></div>
+                <div class="zoom-controls">
+                    <button type="button" id="zoomOutButton">-</button>
+                    <span id="zoomLabel">100%</span>
+                    <button type="button" id="zoomInButton">+</button>
+                </div>
+            </div>
+        </header>
+
+        <div id="inviteFeedback" class="invite-feedback" aria-live="polite"></div>
+
+        <div class="workspace-content">
+            <aside class="pages-panel">
+                <div class="section-heading compact">
+                    <div>
+                        <p class="eyebrow">Pages</p>
+                        <h2>Board pages</h2>
+                    </div>
+                    <button type="button" id="addPageButton" class="icon-button" aria-label="Add page">+</button>
+                </div>
+
+                <div id="pagesList" class="pages-list"></div>
+            </aside>
+
+            <section class="canvas-panel">
+                <div id="canvasViewport" class="canvas-viewport">
+                    <div id="canvasStage" class="canvas-stage">
+                        <canvas id="boardCanvas" width="1920" height="1080"></canvas>
+                        <div id="remoteCursorLayer" class="remote-cursor-layer"></div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </section>
+</main>
+
+<script id="board-initial-data" type="application/json">@Html.Raw(initialBoardJson)</script>
+<script id="board-nickname" type="application/json">@Html.Raw(initialNicknameJson)</script>
+
+@section Scripts {
+    <script src="~/lib/microsoft-signalr/signalr.min.js" asp-append-version="true"></script>
+    <script src="~/js/board.js" asp-append-version="true" type="module"></script>
+}

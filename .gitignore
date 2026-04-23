@@ -1,0 +1,30 @@
+# Build output
+bin/
+obj/
+
+# Local runtime data and secrets
+App_Data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.lscache
+
+# User-specific IDE files
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Logs and temporary files
+logs/
+*.log
+*.tmp
+*.temp
+
+# Local environment files
+.env
+.env.*
+!/.env.example
+

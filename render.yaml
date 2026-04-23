@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: boardspace
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__Postgres
+        fromDatabase:
+          name: boardspace-db
+          property: connectionString
+
+databases:
+  - name: boardspace-db
+    plan: free
+
