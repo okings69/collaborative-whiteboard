@@ -16,15 +16,6 @@ builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
 
-var keysDirectory = Path.Combine(builder.Environment.ContentRootPath, "App_Data", "keys");
-Directory.CreateDirectory(keysDirectory);
-
-builder.Services.AddControllersWithViews();
-builder.Services.AddSignalR();
-builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo(keysDirectory))
-    .SetApplicationName("Boardspace");
-
 var postgresConnectionString = builder.Configuration.GetConnectionString("Postgres");
 if (string.IsNullOrWhiteSpace(postgresConnectionString))
 {
@@ -34,7 +25,15 @@ if (string.IsNullOrWhiteSpace(postgresConnectionString))
 
 postgresConnectionString = NormalizePostgresConnectionString(postgresConnectionString);
 
-builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(postgresConnectionString));
+builder.Services.AddControllersWithViews();
+builder.Services.AddSignalR();
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(
+        postgresConnectionString,
+        npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
+builder.Services.AddDataProtection()
+    .PersistKeysToDbContext<AppDbContext>()
+    .SetApplicationName("Boardspace");
 
 builder.Services.AddScoped<IBoardService, BoardService>();
 builder.Services.AddSingleton<BoardPresenceService>();
@@ -53,7 +52,11 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseStaticFiles();
 
 app.UseRouting();
