@@ -1,16 +1,14 @@
 using CollaborativeBoard.Entities;
-using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace CollaborativeBoard.Data;
 
-public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options), IDataProtectionKeyContext
+public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
     public DbSet<Participant> Participants => Set<Participant>();
     public DbSet<Board> Boards => Set<Board>();
     public DbSet<BoardPage> BoardPages => Set<BoardPage>();
     public DbSet<DrawingElement> DrawingElements => Set<DrawingElement>();
-    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -73,11 +71,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
                 .OnDelete(DeleteBehavior.SetNull);
             entity.HasIndex(element => new { element.BoardPageId, element.CreatedAtUtc });
             entity.HasIndex(element => new { element.BoardPageId, element.LayerOrder });
-        });
-
-        modelBuilder.Entity<DataProtectionKey>(entity =>
-        {
-            entity.ToTable("DataProtectionKeys");
         });
     }
 }

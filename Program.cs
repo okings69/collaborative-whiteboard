@@ -25,6 +25,9 @@ if (string.IsNullOrWhiteSpace(postgresConnectionString))
 
 postgresConnectionString = NormalizePostgresConnectionString(postgresConnectionString);
 
+var keysDirectory = Path.Combine(builder.Environment.ContentRootPath, "App_Data", "keys");
+Directory.CreateDirectory(keysDirectory);
+
 builder.Services.AddControllersWithViews();
 builder.Services.AddSignalR();
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -32,7 +35,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         postgresConnectionString,
         npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 builder.Services.AddDataProtection()
-    .PersistKeysToDbContext<AppDbContext>()
+    .PersistKeysToFileSystem(new DirectoryInfo(keysDirectory))
     .SetApplicationName("Boardspace");
 
 builder.Services.AddScoped<IBoardService, BoardService>();
