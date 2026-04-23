@@ -109,17 +109,37 @@ public sealed class BoardService(AppDbContext dbContext) : IBoardService
             return null;
         }
 
-        var nextSortOrder = await dbContext.BoardPages
+        var existingPages = await dbContext.BoardPages
             .Where(entry => entry.BoardId == request.BoardId)
-            .Select(entry => (int?)entry.SortOrder)
-            .MaxAsync() ?? 0;
+            .OrderBy(entry => entry.SortOrder)
+            .ToListAsync();
 
+        var wasRenumbered = false;
+        for (var index = 0; index < existingPages.Count; index++)
+        {
+            var pageNumber = index + 1;
+            if (existingPages[index].SortOrder == pageNumber && existingPages[index].Title == $"Page {pageNumber}")
+            {
+                continue;
+            }
+
+            existingPages[index].SortOrder = pageNumber;
+            existingPages[index].Title = $"Page {pageNumber}";
+            wasRenumbered = true;
+        }
+
+        if (wasRenumbered)
+        {
+            await dbContext.SaveChangesAsync();
+        }
+
+        var displayNumber = existingPages.Count + 1;
         var page = new BoardPage
         {
             Id = Guid.NewGuid(),
             BoardId = request.BoardId,
-            Title = string.IsNullOrWhiteSpace(request.Title) ? $"Page {nextSortOrder + 1}" : request.Title.Trim(),
-            SortOrder = nextSortOrder + 1,
+            Title = $"Page {displayNumber}",
+            SortOrder = displayNumber,
             CreatedAtUtc = DateTime.UtcNow
         };
 
@@ -159,7 +179,9 @@ public sealed class BoardService(AppDbContext dbContext) : IBoardService
         var sortOrder = 1;
         foreach (var remainingPage in board.Pages.Where(entry => entry.Id != page.Id).OrderBy(entry => entry.SortOrder))
         {
-            remainingPage.SortOrder = sortOrder++;
+            remainingPage.SortOrder = sortOrder;
+            remainingPage.Title = $"Page {sortOrder}";
+            sortOrder++;
         }
 
         board.UpdatedAtUtc = DateTime.UtcNow;
@@ -333,6 +355,10 @@ public sealed class BoardService(AppDbContext dbContext) : IBoardService
 
     private static BoardWorkspaceDto MapBoard(Board board)
     {
+        var orderedPages = board.Pages
+            .OrderBy(page => page.SortOrder)
+            .ToList();
+
         return new BoardWorkspaceDto
         {
             Id = board.Id,
@@ -340,13 +366,12 @@ public sealed class BoardService(AppDbContext dbContext) : IBoardService
             ShareCode = board.ShareCode,
             AccentColor = board.AccentColor,
             CreatedByNickname = board.CreatedByNickname,
-            Pages = board.Pages
-                .OrderBy(page => page.SortOrder)
-                .Select(page => new BoardPageDto
+            Pages = orderedPages
+                .Select((page, index) => new BoardPageDto
                 {
                     Id = page.Id,
-                    Title = page.Title,
-                    SortOrder = page.SortOrder,
+                    Title = $"Page {index + 1}",
+                    SortOrder = index + 1,
                     Elements = page.Elements
                         .OrderBy(element => element.LayerOrder)
                         .ThenBy(element => element.CreatedAtUtc)

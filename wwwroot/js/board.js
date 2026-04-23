@@ -423,12 +423,12 @@ function renderPages() {
     elements.pagesList.innerHTML = "";
 
     sortPages();
-    for (const page of state.board.pages) {
-        elements.pagesList.append(createPageCard(page));
+    for (const [index, page] of state.board.pages.entries()) {
+        elements.pagesList.append(createPageCard(page, index));
     }
 }
 
-function createPageCard(page) {
+function createPageCard(page, index) {
     const card = document.createElement("article");
     card.className = `page-card${page.id === state.activePageId ? " is-active" : ""}`;
 
@@ -442,7 +442,7 @@ function createPageCard(page) {
     header.className = "page-card-header";
 
     const title = document.createElement("h3");
-    title.textContent = page.title;
+    title.textContent = `Page ${index + 1}`;
 
     const removeButton = document.createElement("button");
     removeButton.type = "button";
@@ -529,14 +529,13 @@ function renderRemoteCursors() {
 
 async function addPage() {
     const request = {
-        boardId: state.board.id,
-        title: `Page ${state.board.pages.length + 1}`
+        boardId: state.board.id
     };
 
     try {
         await invokeHub("AddPage", request);
     } catch {
-        const page = await createPageViaApi(request.title);
+        const page = await createPageViaApi();
         if (!page) {
             setInviteFeedback("The page could not be created right now.");
             return;
@@ -734,13 +733,13 @@ function invokeHub(method, payload) {
     return state.connection.invoke(method, payload);
 }
 
-async function createPageViaApi(title) {
+async function createPageViaApi() {
     const response = await fetch(`/api/boards/${state.board.id}/pages`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({ title })
+        body: JSON.stringify({})
     });
 
     if (!response.ok) {
