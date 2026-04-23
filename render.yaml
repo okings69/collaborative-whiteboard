@@ -1,7 +1,7 @@
 services:
   - type: web
     name: boardspace
-    env: docker
+    runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
     autoDeploy: true
@@ -16,4 +16,3 @@ services:
 databases:
   - name: boardspace-db
     plan: free
-

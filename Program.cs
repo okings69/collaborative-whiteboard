@@ -32,6 +32,8 @@ if (string.IsNullOrWhiteSpace(postgresConnectionString))
         "Missing PostgreSQL connection string. Set ConnectionStrings__Postgres before starting the app.");
 }
 
+postgresConnectionString = NormalizePostgresConnectionString(postgresConnectionString);
+
 builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(postgresConnectionString));
 
 builder.Services.AddScoped<IBoardService, BoardService>();
@@ -64,3 +66,27 @@ app.MapControllers();
 app.MapHub<BoardHub>("/hubs/boards");
 
 app.Run();
+
+static string NormalizePostgresConnectionString(string value)
+{
+    if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+        (uri.Scheme != "postgres" && uri.Scheme != "postgresql"))
+    {
+        return value;
+    }
+
+    var userInfo = uri.UserInfo.Split(':', 2);
+    var username = Uri.UnescapeDataString(userInfo.ElementAtOrDefault(0) ?? string.Empty);
+    var password = Uri.UnescapeDataString(userInfo.ElementAtOrDefault(1) ?? string.Empty);
+    var database = uri.AbsolutePath.TrimStart('/');
+
+    return new Npgsql.NpgsqlConnectionStringBuilder
+    {
+        Host = uri.Host,
+        Port = uri.Port > 0 ? uri.Port : 5432,
+        Database = database,
+        Username = username,
+        Password = password,
+        SslMode = Npgsql.SslMode.Require
+    }.ConnectionString;
+}
